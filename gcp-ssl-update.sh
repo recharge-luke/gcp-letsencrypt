@@ -9,14 +9,16 @@ DOMAIN=$1
 FRONT_END_NAME_IPV4=$2
 FRONT_END_NAME_IPV6=$3
 SERIAL=`openssl x509 -in ./live/$DOMAIN/cert.pem -serial -noout | awk -F= '{print tolower($2)}'`
-NAME=`echo $DOMAIN-$SERIAL | sed 's/\./-/g'`
+NAME=`echo $DOMAIN-$SERIAL | cut -b1-62 | sed 's/\./-/g'`
 
 # Join array by delimiter - see https://stackoverflow.com/a/17841619/2242975
 function join_by { local IFS="$1"; shift; echo "$*"; }
 
-if `gcloud compute ssl-certificates list | grep -q $SERIAL`; then
+if `gcloud compute ssl-certificates list | grep -q $NAME`; then
    echo 'Certificate with this serial number was already processed, skipping loadbalancer update'
 else
+    echo "Domain $DOMAIN"
+    
     # Create a new ssl-certificate entry
     gcloud compute ssl-certificates create $NAME --certificate=./live/$DOMAIN/fullchain.pem --private-key=./live/$DOMAIN/privkey.pem
 
@@ -24,7 +26,7 @@ else
     NEW_CERT=`gcloud compute ssl-certificates list --filter="name~'^$DOMAIN.*'" --limit 1 --sort-by ~creationTimestamp --format="value(name)"`
 
     if [[ ! -z "$FRONT_END_NAME_IPV4" ]]; then
-        echo 'Updating IPV4 forwarding leg'
+        echo "Updating IPV4 forwarding leg: $FRONT_END_NAME_IPV4"
 
         PROXY_IPV4=`gcloud compute forwarding-rules list --filter="name~'$FRONT_END_NAME_IPV4'" --format="value(target.scope())"`
         if [[ -z "$PROXY_IPV4" ]]; then
@@ -45,7 +47,7 @@ else
     fi
 
     if [[ ! -z "$FRONT_END_NAME_IPV6" ]]; then
-       echo 'Updating IPV6 forwarding leg'
+       echo "Updating IPV4 forwarding leg: $FRONT_END_NAME_IPV6"
 
         PROXY_IPV6=`gcloud compute forwarding-rules list --filter="name~'$FRONT_END_NAME_IPV6'" --format="value(target.scope())"`
         if [[ -z "$PROXY_IPV6" ]]; then
